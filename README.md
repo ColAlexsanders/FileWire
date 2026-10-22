@@ -1,6 +1,6 @@
 # FileWire
 
-A TCP client/server file-transfer tool written in C++17 on BSD sockets. This application includes a length-prefixed protocol, an integration test suite, sanitizer build support, and CI.
+A TCP client/server file-transfer tool written in C++ using abstraction libraries for file handling, and BSD sockets for the socket logic. This application includes a length-prefixed protocol, an integration test suite, sanitizer build support, and CI.
 
 
 ## Build
@@ -29,13 +29,17 @@ The server saves each transfer under its original filename inside `<FILE-DIR>`, 
 ## Wire Protocol
 
 ```
-+-------------+----------+--------------+---------------------------+
-| 2-byte name | filename | 8-byte size  | payload (exactly `size`)  |
-| length      |          | (big-endian) |                           |
-+-------------+----------+--------------+---------------------------+
++-------------+----------+--------------+----------+
+| 2-byte name | filename | 8-byte size  | payload  |
+| length      |          | (big-endian) |          |
++-------------+----------+--------------+----------+
 ```
 
-The client sends the metadata first, then the payload. The server saves the file under the transmitted name and marks it `ERROR` if the connection closes early, so a truncated transfer can never look like a complete one. The purpose of this addition is to provide the receiver with information on when the message is supposed to end and begin since TCP doesn't preserve message boundaries. 
++ 2-byte name length - A frame for the filename, provides the length of the filename itself
++ filename - what's a filename?
++ 8-byte size - The frame for the payload. Tells the receiver how many bytes the segment is, which can then be used for truncation detection.
+
+The client sends the application header first, then the TCP segments. The server saves the file under the transmitted name and marks it `ERROR` if the connection closes early, so a truncated transfer can never look like a complete one. The header's purpose is to provide the receiver with information on when the message is supposed to end and begin since TCP doesn't preserve message boundaries. 
 
 ## Test
 
@@ -51,7 +55,7 @@ make slow-test   # adds the 10s idle-timeout case
 ```sh
 make asan        # -fsanitize=address,undefined
 make ubsan       # -fsanitize=undefined
-make tsan        # -fsanitize=thread (for the upcoming concurrency work)
+make tsan        # -fsanitize=thread (for potential concurrency functionality)
 ```
 
 Each target cleans first, since Make cannot detect a change to `SANITIZE`.
