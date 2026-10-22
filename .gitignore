@@ -1,0 +1,13 @@
+# Build outputs (produced in the repo root by the Makefile)
+/server
+/client
+*.o
+*.gch
+*.dSYM
+*.tar.gz
+
+# Received files and VM state
+/save/
+/.vagrant/
+
+AGENTS.md
