@@ -1,6 +1,6 @@
 # FileWire
 
-A TCP client/server file-transfer tool written in C++17 on BSD sockets. This application includes a length-prefixed wire format, an integration test suite, sanitizer build support, and CI.
+A TCP client/server file-transfer tool written in C++17 on BSD sockets. This application includes a length-prefixed protocol, an integration test suite, sanitizer build support, and CI.
 
 
 ## Build
@@ -11,8 +11,6 @@ Running make would create two binaries: `server` and `client`
 make -j $(nproc)
 make clean
 ```
-
-Builds use `-Wall -Wextra -Wpedantic -Werror -std=c++17`. Override the compiler or flags as usual: `make CXX=clang++`.
 
 ## Run
 
@@ -28,7 +26,7 @@ The server saves each transfer under its original filename inside `<FILE-DIR>`, 
 ./client localhost 8080 ./photo.jpg
 ```
 
-## Wire format
+## Wire Protocol
 
 ```
 +-------------+----------+--------------+---------------------------+
@@ -37,7 +35,7 @@ The server saves each transfer under its original filename inside `<FILE-DIR>`, 
 +-------------+----------+--------------+---------------------------+
 ```
 
-The client sends the metadata first, then the payload. The server saves the file under the transmitted name and marks it `ERROR` if the connection closes early, so a truncated transfer can never look like a complete one.
+The client sends the metadata first, then the payload. The server saves the file under the transmitted name and marks it `ERROR` if the connection closes early, so a truncated transfer can never look like a complete one. The purpose of this addition is to provide the receiver with information on when the message is supposed to end and begin since TCP doesn't preserve message boundaries. 
 
 ## Test
 
