@@ -6,3 +6,4 @@ IndentWidth: 4
 ColumnLimit: 100
 ReflowComments: false
 AllowShortIfStatementsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None

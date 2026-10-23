@@ -75,15 +75,17 @@ Both binaries read these so tests can exercise slow/large paths quickly. Unset o
 src/server.cpp          listener + receiver
 src/client.cpp          connector + sender
 tests/integration.sh    end-to-end tests (drives the built binaries)
+tests/fail_socket.c     shim for the bad socket test
 Makefile                build, test, sanitizer, format, lint targets
 .github/workflows/      CI: build+test on gcc/clang, and the three sanitizers
 ```
 
-## Formatting and linting (opt-in)
+## Formatting and linting
 
 ```sh
-make format        # clang-format -i src/*.cpp
-make lint          # clang-tidy
+make format                          # clang-format -i src/*.cpp
+make lint                            # clang-tidy with the .clang-tidy checks defined in Makefile
+make lint LINT_FLAGS=--list-checks   # list the enabled checks
 ```
 
-The sources are not yet clang-format-clean; `.clang-format` preserves the hand-written block comments, so running `make format` is safe but opt-in.
+Primarily for me to learn how linting works when building C++ applications. `.clang-format` preserves the hand-written block comments, so running `make format` doesn't break anything in my current coding style. `.clang-tidy` enables the clang-analyzer, bugprone, performance, and portability check groups.

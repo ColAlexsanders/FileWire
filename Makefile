@@ -1,9 +1,10 @@
 # FileWire build. Plain Make by design (no CMake): `make` builds both binaries,
 # `make test` runs the integration suite, and `make asan|ubsan|tsan` rebuild from
 # scratch under a sanitizer.
-CXX      ?= g++
-CXXFLAGS ?= -g -O2 -Wall -Wextra -Wpedantic -Werror -std=c++17
-SRC_DIR  := src
+CXX        ?= g++
+CXXFLAGS   ?= -g -O2 -Wall -Wextra -Wpedantic -Werror -std=c++17
+SRC_DIR    := src
+LINT_FLAGS ?=
 
 # SANITIZE=address|undefined|thread adds instrumentation; unset means a normal build.
 # + make cannot see this variable change, so the sanitizer targets clean first.
@@ -17,7 +18,7 @@ endif
 
 BINARIES := server client
 
-.PHONY: all server client test slow-test asan ubsan tsan format lint clean dist
+.PHONY: all test slow-test asan ubsan tsan format lint clean dist
 
 all: $(BINARIES)
 
@@ -50,9 +51,10 @@ tsan:
 format:
 	clang-format -i $(SRC_DIR)/*.cpp
 
+# Extra clang-tidy flags, e.g. `make lint LINT_FLAGS=--list-checks`.
 lint:
-	clang-tidy $(SRC_DIR)/server.cpp -- $(CXXFLAGS)
-	clang-tidy $(SRC_DIR)/client.cpp -- $(CXXFLAGS)
+	clang-tidy $(LINT_FLAGS) $(SRC_DIR)/server.cpp -- $(CXXFLAGS)
+	clang-tidy $(LINT_FLAGS) $(SRC_DIR)/client.cpp -- $(CXXFLAGS)
 
 clean:
 	rm -rf *.o *~ *.gch *.swp *.dSYM $(BINARIES) *.tar.gz

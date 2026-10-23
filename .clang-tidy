@@ -1,0 +1,9 @@
+---
+# Opt-in lint config (`make lint`). Style-only checks are deliberately excluded;
+# this targets correctness and performance.
+Checks: >
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  -bugprone-easily-swappable-parameters
