@@ -1,22 +1,22 @@
-#include <fstream>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <iostream>
 #include <csignal>
-#include <cstdlib>
-#include <filesystem>
-#include <errno.h>
 #include <cstdint>
+#include <cstdlib>
+#include <errno.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 using namespace std;
 
-struct sockaddr_in sa; // server address
-struct sockaddr_in ca; // client address
+struct sockaddr_in sa; /* server address */
+struct sockaddr_in ca; /* client address */
 
 /** 
  * Env overrides let the test script drive the timeout and size-limit paths
@@ -39,12 +39,12 @@ static long envLong(const char *name, long fallback)
     return parsed;
 }
 
-/* SIGTERM/SIGQUIT global flag and handler function */ 
+/* SIGTERM/SIGQUIT global flag and handler function */
 volatile sig_atomic_t shutdown_requested = 0;
 
-void signalHandler(int)
-{
-    shutdown_requested = 1;
+void signalHandler(int) 
+{ 
+    shutdown_requested = 1; 
 }
 
 int createSocket()
@@ -60,6 +60,12 @@ int createSocket()
     /* enable the socket to support multiple connections */
     int yes = 1;
     setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+ 
+    if (server_socket < 0)
+    {
+        perror("socket");
+        exit(1);
+    }
 
     return server_socket;
 }
@@ -67,14 +73,14 @@ int createSocket()
 int createPort(char *argv[])
 {
     /* allows for port cli input to get validated */
-    char* endptr;     
-    
+    char *endptr;
+
     /** 
      * convert string into a decimal long and set endptr
      * to point to where the conversion stopped 
     **/
-    long port_long = strtol(argv[1], &endptr, 10); 
-    
+    long port_long = strtol(argv[1], &endptr, 10);
+
     if (*endptr != '\0' || endptr == argv[1])
     {
         cerr << "ERROR: Invalid port number" << endl;
@@ -101,7 +107,7 @@ void verifyDir(char *argv[])
     string file_dir = argv[2];
 
     cout << "Checking directory: '" << file_dir << "'" << endl;
-    
+
     if (!filesystem::exists(argv[2]))
     {
         cerr << "ERROR: Directory does not exist" << endl;
@@ -118,11 +124,11 @@ void verifyDir(char *argv[])
 void bindSocket(int server_socket, int port)
 {
     sa.sin_family = AF_INET;
-    sa.sin_port = htons(port); 
+    sa.sin_port = htons(port);
     sa.sin_addr.s_addr = INADDR_ANY;
     memset(sa.sin_zero, '\0', sizeof(sa.sin_zero));
 
-    if (bind(server_socket, (struct sockaddr*)&sa, sizeof(sa)) == -1 )
+    if (bind(server_socket, (struct sockaddr *)&sa, sizeof(sa)) == -1)
     {
         perror("bind");
         exit(1);
@@ -184,7 +190,8 @@ static bool recvExact(int client_socket, char *buffer, size_t length, long timeo
 
     while (total_read < length)
     {
-        ssize_t bytes_received = recvOnce(client_socket, buffer + total_read, length - total_read, timeout_seconds);
+        ssize_t bytes_received =
+            recvOnce(client_socket, buffer + total_read, length - total_read, timeout_seconds);
 
         if (bytes_received <= 0)
         {
@@ -208,7 +215,7 @@ void receiveFile(int client_socket, char *argv[])
     {
         perror("setsockopt");
     }
-    
+
     /* 100MiB default */
     const long MAX_FILE_SIZE = envLong("MAX_FILE_SIZE", 100L * 1024 * 1024);
 
@@ -220,9 +227,11 @@ void receiveFile(int client_socket, char *argv[])
     unsigned char size_bytes[8] = {0};
     string filename;
     uint64_t declared_size = 0;
-    bool header_ok = recvExact(client_socket, reinterpret_cast<char *>(name_length_bytes), sizeof(name_length_bytes), timeout_seconds);
+    bool header_ok = recvExact(client_socket, reinterpret_cast<char *>(name_length_bytes),
+                               sizeof(name_length_bytes), timeout_seconds);
 
-    uint16_t name_length = static_cast<uint16_t>((name_length_bytes[0] << 8) | name_length_bytes[1]);
+    uint16_t name_length =
+        static_cast<uint16_t>((name_length_bytes[0] << 8) | name_length_bytes[1]);
     header_ok = header_ok && name_length > 0 && name_length <= 255;
 
     if (header_ok)
@@ -231,7 +240,8 @@ void receiveFile(int client_socket, char *argv[])
         header_ok = recvExact(client_socket, filename.data(), name_length, timeout_seconds);
     }
 
-    header_ok = header_ok && recvExact(client_socket, reinterpret_cast<char *>(size_bytes), sizeof(size_bytes), timeout_seconds);
+    header_ok = header_ok && recvExact(client_socket, reinterpret_cast<char *>(size_bytes),
+                                       sizeof(size_bytes), timeout_seconds);
 
     if (header_ok)
     {
@@ -242,7 +252,8 @@ void receiveFile(int client_socket, char *argv[])
     }
 
     /* a basename only, so a hostile client cannot escape the storage directory */
-    bool name_valid = header_ok && filename.find('/') == string::npos && filename.find('\0') == string::npos && filename != "." && filename != "..";
+    bool name_valid = header_ok && filename.find('/') == string::npos &&
+                      filename.find('\0') == string::npos && filename != "." && filename != "..";
 
     if (!name_valid)
     {
@@ -253,7 +264,8 @@ void receiveFile(int client_socket, char *argv[])
     bool size_valid = declared_size <= static_cast<uint64_t>(MAX_FILE_SIZE);
     if (!size_valid)
     {
-        cerr << "ERROR: Declared size " << declared_size << " exceeds the " << MAX_FILE_SIZE << " byte limit" << endl;
+        cerr << "ERROR: Declared size " << declared_size << " exceeds the " << MAX_FILE_SIZE
+             << " byte limit" << endl;
     }
 
     string path = string(argv[2]) + "/" + filename;
@@ -281,7 +293,8 @@ void receiveFile(int client_socket, char *argv[])
         {
             if (bytes_received == 0)
             {
-                cerr << "ERROR: Truncated transfer: got " << total_bytes << " of " << declared_size << " bytes" << endl;
+                cerr << "ERROR: Truncated transfer: got " << total_bytes << " of " << declared_size
+                     << " bytes" << endl;
             }
             failed = true;
             break;
@@ -311,28 +324,27 @@ void receiveFile(int client_socket, char *argv[])
 void acceptConnection(int server_socket, char *argv[])
 {
     socklen_t ca_size = sizeof(ca);
-    int client_socket = accept(server_socket, (struct sockaddr*)&ca, &ca_size);
+    int client_socket = accept(server_socket, (struct sockaddr *)&ca, &ca_size);
 
     if (client_socket == -1)
     {
         perror("accept");
         return;
     }
-    
+
     receiveFile(client_socket, argv);
-    
-    close(client_socket); 
+
+    close(client_socket);
 }
 
-
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     if (argc != 3)
     {
         cerr << "ERROR: Usage: " << argv[0] << " <PORT> <FILE-DIR>" << endl;
         return 1;
     }
-    
+
     signal(SIGTERM, signalHandler);
     signal(SIGQUIT, signalHandler);
 
@@ -340,14 +352,14 @@ int main(int argc, char* argv[])
     int server_socket = createSocket();
     int port = createPort(argv);
     bindSocket(server_socket, port);
-    
+
     startListening(server_socket);
-    
+
     while (!shutdown_requested)
     {
         acceptConnection(server_socket, argv);
     }
-    
+
     close(server_socket);
     return 0;
 }

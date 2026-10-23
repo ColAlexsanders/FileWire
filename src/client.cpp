@@ -1,18 +1,18 @@
-#include <fstream>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <iostream>
-#include <cstdlib>
-#include <netdb.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <cstdint>
+#include <cstdlib>
+#include <fcntl.h>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -45,14 +45,20 @@ int createSocket()
     memset(&sa_creat, 0, sizeof(sa_creat));
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
+    if (client_socket < 0)
+    {
+        perror("socket");
+        exit(1);
+    }
+
     return client_socket;
 }
 
-void handleFile(const char* file, int client_socket)
+void handleFile(const char *file, int client_socket)
 {
     /* 100MiB default */
-    const long MAX_FILE_SIZE = envLong("MAX_FILE_SIZE", 100L * 1024 * 1024); 
-     
+    const long MAX_FILE_SIZE = envLong("MAX_FILE_SIZE", 100L * 1024 * 1024);
+
     ifstream infile(file, ios::binary);
     if (!infile)
     {
@@ -76,7 +82,7 @@ void handleFile(const char* file, int client_socket)
     send_timeout.tv_sec = timeout_seconds;
     send_timeout.tv_usec = 0;
 
-    /* give socket the ability to timeout */  
+    /* give socket the ability to timeout */
     if (setsockopt(client_socket, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout)) < 0)
     {
         perror("setsockopt SO_SNDTIMEO");
@@ -108,15 +114,16 @@ void handleFile(const char* file, int client_socket)
     size_t header_sent = 0;
     while (header_sent < header_len)
     {
-        char *tail          = &header[header_sent];
-        size_t tail_len     = header_len - header_sent;
-        ssize_t bytes_sent  = send(client_socket, tail, tail_len, 0);
+        char *tail = &header[header_sent];
+        size_t tail_len = header_len - header_sent;
+        ssize_t bytes_sent = send(client_socket, tail, tail_len, 0);
 
         if (bytes_sent < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                cerr << "ERROR: Send timeout - unable to send data for " << timeout_seconds << " seconds" << endl;
+                cerr << "ERROR: Send timeout - unable to send data for " << timeout_seconds
+                     << " seconds" << endl;
             }
             else if (errno == EPIPE || errno == ECONNRESET)
             {
@@ -158,15 +165,16 @@ void handleFile(const char* file, int client_socket)
         **/
         while (chunks_sent < bytes_read)
         {
-            char *tail          = buffer + chunks_sent;
-            size_t tail_len     = bytes_read - chunks_sent;
-            ssize_t bytes_sent  = send(client_socket, tail, tail_len, 0);
+            char *tail = buffer + chunks_sent;
+            size_t tail_len = bytes_read - chunks_sent;
+            ssize_t bytes_sent = send(client_socket, tail, tail_len, 0);
 
             if (bytes_sent < 0)
             {
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
-                    cerr << "ERROR: Send timeout - unable to send data for " << timeout_seconds << " seconds" << endl;
+                    cerr << "ERROR: Send timeout - unable to send data for " << timeout_seconds
+                         << " seconds" << endl;
                 }
                 else if (errno == EPIPE || errno == ECONNRESET)
                 {
@@ -202,13 +210,13 @@ void handleFile(const char* file, int client_socket)
  * during connect() by changing socket properties, enabling the 10 second idle timeout
  * instead of the default OS timeout period 
 **/
-int connectionTimeout (int client_socket, struct sockaddr* sa2, socklen_t addrlen, int timeout_sec)
+int connectionTimeout(int client_socket, struct sockaddr *sa2, socklen_t addrlen, int timeout_sec)
 {
     /* supposed to be in blocking mode with a return value of 0 */
-     int flags = fcntl(client_socket, F_GETFL, 0); 
-    
-     if (flags < 0)
-     {
+    int flags = fcntl(client_socket, F_GETFL, 0);
+
+    if (flags < 0)
+    {
         perror("fcntl F_GETFL");
         return -1;
     }
@@ -220,8 +228,7 @@ int connectionTimeout (int client_socket, struct sockaddr* sa2, socklen_t addrle
         return -1;
     }
     
-    /* then attempt to connect the client to server */
-    int result = connect(client_socket, sa2, addrlen);
+    int result = connect(client_socket, sa2, addrlen); 
 
     /* if a connection is made immediately,
      * then restore blocking mode          */
@@ -241,22 +248,22 @@ int connectionTimeout (int client_socket, struct sockaddr* sa2, socklen_t addrle
     /* will get specified as 10 later on */
     send_timeout.tv_sec = timeout_sec;
     send_timeout.tv_usec = 0;
-   
+
     /* monitors for when the socket is ready for writing */
     result = select(client_socket + 1, NULL, &write_fds, NULL, &send_timeout);
-    
+
     if (result == 0)
     {
         errno = ETIMEDOUT;
         return -1;
     }
-    
+
     if (result < 0)
     {
         perror("select");
         return -1;
     }
-    
+
     /**
      * Check if connection actually succeeded and give the socket
      * the ability to support socket error coverage
@@ -268,13 +275,13 @@ int connectionTimeout (int client_socket, struct sockaddr* sa2, socklen_t addrle
         perror("getsockopt SO_ERROR");
         return -1;
     }
-    
+
     if (sock_error != 0)
     {
         errno = sock_error;
         return -1;
     }
-    
+
     /* Restore blocking mode if connection succeeds */
     fcntl(client_socket, F_SETFL, flags);
 
@@ -283,32 +290,32 @@ int connectionTimeout (int client_socket, struct sockaddr* sa2, socklen_t addrle
 
 void createConnection(int client_socket, char *argv[])
 {
-    const char* hostname = argv[1];
-    const char* port = argv[2];
-    const char* file = argv[3];
+    const char *hostname = argv[1];
+    const char *port = argv[2];
+    const char *file = argv[3];
 
-    char* endptr;
+    char *endptr;
     long port_long = strtol(port, &endptr, 10);
-    
+
     /* Check if the port is a valid number */
     if (*endptr != '\0' || endptr == argv[2])
     {
         cerr << "ERROR: Invalid port number" << std::endl;
         exit(1);
     }
-    
+
     /* check if the port is in a range between 1024 and 65535 */
     if (port_long < 1024 || port_long > 65535)
     {
         cerr << "ERROR: port must be between 1024 and 65535" << std::endl;
         exit(1);
     }
-    
+
     /* bind socket using addrinfo in order to support the
      * usages of localhost and hostnames for CLI arguments */
     sa.ai_family = AF_INET;
     sa.ai_socktype = SOCK_STREAM;
- 
+
     /** 
      * 3rd paramenter is used to fill in specifications for 
      * the address, and result is where getaddrinfo stores 
@@ -318,7 +325,7 @@ void createConnection(int client_socket, char *argv[])
     {
         cerr << "ERROR: Could not resolve hostname" << endl;
         exit(1);
-    } 
+    }
 
     /** 
      * these get triggered if the client can't make connections either within a given
@@ -326,7 +333,8 @@ void createConnection(int client_socket, char *argv[])
      **/
     long timeout_seconds = envLong("TIMEOUT_SEC", 10);
 
-    if (connectionTimeout(client_socket, result->ai_addr, result->ai_addrlen, timeout_seconds) == -1)
+    if (connectionTimeout(client_socket, result->ai_addr, result->ai_addrlen, timeout_seconds) ==
+        -1)
     {
         if (errno == ETIMEDOUT)
         {
@@ -334,7 +342,7 @@ void createConnection(int client_socket, char *argv[])
         }
         else
         {
-            cerr << "ERROR: failed to connect to server" << endl; 
+            cerr << "ERROR: failed to connect to server" << endl;
         }
         freeaddrinfo(result);
         close(client_socket);
@@ -346,7 +354,7 @@ void createConnection(int client_socket, char *argv[])
     close(client_socket);
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     if (argc != 4)
     {
@@ -356,6 +364,6 @@ int main(int argc, char* argv[])
 
     int my_socket = createSocket();
     createConnection(my_socket, argv);
-    
+
     return 0;
 }
