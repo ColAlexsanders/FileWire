@@ -17,6 +17,13 @@ fail_count=0
 pass() { printf '  ok    %s\n' "$1"; pass_count=$((pass_count + 1)); }
 fail() { printf '  FAIL  %s\n' "$1"; fail_count=$((fail_count + 1)); }
 
+# First non-empty line of a log file, for failure messages.
+first_log_line() {
+    local line
+    line="$(grep -m1 . "$1" 2>/dev/null)"
+    echo "${line:-<empty log>}"
+}
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -205,7 +212,7 @@ test_client_size_check() {
     if MAX_FILE_SIZE=1048576 "$CLIENT" 127.0.0.1 "$port" "$src" >"$work/$name.log" 2>&1; then
         fail "$name (client accepted an oversized file)"
     elif ! grep -q "too large" "$work/$name.log"; then
-        fail "$name (client failed for the wrong reason)"
+        fail "$name (client failed for the wrong reason: $(first_log_line "$work/$name.log"))"
     elif grep -q "Sent " "$work/$name.log"; then
         fail "$name (client sent bytes before checking the size)"
     else
@@ -257,13 +264,66 @@ test_port_range() {
     if "$CLIENT" 127.0.0.1 1023 "$dir/nope" >"$work/$name.client.log" 2>&1; then
         fail "$name (client accepted port 1023)"
     elif ! grep -q "1024 and 65535" "$work/$name.client.log"; then
-        fail "$name (client failed for the wrong reason)"
+        fail "$name (client failed for the wrong reason: $(first_log_line "$work/$name.client.log"))"
     elif "$SERVER" 1023 "$dir" >"$work/$name.server.log" 2>&1; then
         fail "$name (server accepted port 1023)"
     elif ! grep -q "1024 and 65535" "$work/$name.server.log"; then
-        fail "$name (server failed for the wrong reason)"
+        fail "$name (server failed for the wrong reason: $(first_log_line "$work/$name.server.log"))"
     else
         pass "$name"
+    fi
+}
+
+# The shim makes socket() return -1, which is the only way to reach the
+# negative-fd guard. If the binary_is_sanitized function didn't exist, 
+# then this would have to get skipped for sanitized builds because  ASan in 
+# particular refuses to run when another library (fail_socket.so) is preloaded 
+# ahead of its runtime due to it needing its function interceptors binded 
+# before libc so it can find memory issues.
+build_fail_socket_shim() {
+    local shim="$work/fail_socket.so"
+    if [ ! -f "$shim" ]; then
+        gcc -shared -fPIC -o "$shim" "$ROOT/tests/fail_socket.c" 2>"$work/fail_socket.build.log" || return 1
+    fi
+    echo "$shim"
+}
+
+# Skip the shim when the binaries carry a sanitized runtime
+binary_is_sanitized() {
+    ldd "$1" 2>/dev/null | grep -qE 'lib(asan|ubsan|tsan)'
+}
+
+test_bad_socket() {
+    local name="bad-socket"
+    local src="$work/$name.bin"
+    local dir="$work/$name"
+    make_fixture 16 "$src"
+    mkdir -p "$dir"
+
+    local shim
+    if ! shim="$(build_fail_socket_shim)"; then
+        fail "$name (could not build the socket shim)"
+        return
+    fi
+
+    # client: createSocket() is coded to exit before any connect is attempted
+    port="$(find_free_port)"
+    if LD_PRELOAD="$shim" "$CLIENT" 127.0.0.1 "$port" "$src" >"$work/$name.client.log" 2>&1; then
+        fail "$name (client accepted a negative socket)"
+    elif ! grep -q "^socket:" "$work/$name.client.log"; then
+        fail "$name (client failed for the wrong reason: $(first_log_line "$work/$name.client.log"))"
+    else
+        pass "$name (client)"
+    fi
+
+    # server: the same guard lives in its own createSocket()
+    port="$(find_free_port)"
+    if LD_PRELOAD="$shim" "$SERVER" "$port" "$dir" >"$work/$name.server.log" 2>&1; then
+        fail "$name (server accepted a negative socket)"
+    elif ! grep -q "^socket:" "$work/$name.server.log"; then
+        fail "$name (server failed for the wrong reason: $(first_log_line "$work/$name.server.log"))"
+    else
+        pass "$name (server)"
     fi
 }
 
@@ -307,6 +367,11 @@ test_connection_refused
 test_usage_errors
 test_bad_directory
 test_port_range
+
+# exclusion of bad socket test for sanitized builds 
+if ! binary_is_sanitized "$CLIENT" && ! binary_is_sanitized "$SERVER"; then
+    test_bad_socket
+fi
 
 if [ "${RUN_SLOW:-0}" = "1" ]; then
     test_idle_timeout
